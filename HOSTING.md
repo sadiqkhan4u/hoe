@@ -44,3 +44,7 @@ Choose the actual path using the account's filesystem; do not paste an invented 
 The GitHub build tests verify the app, not the Hostinger account configuration. The initial deployment is confirmed by the supplied Hostinger success screen. Public DNS/HTTPS and counter persistence still need independent verification.
 
 Official guide: https://www.hostinger.com/support/how-to-deploy-a-nodejs-website-in-hostinger/
+
+## Countdown and waitlist activation
+
+See [WAITLIST.md](WAITLIST.md) for mail/bot-protection setup. Default launch is December 25, 2026 at 00:00 PST. The existing build/start settings do not change. Keep private waitlist data beside counters in the persistent data directory. The waitlist is inactive until mail credentials and Turnstile keys are supplied.

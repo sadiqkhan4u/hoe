@@ -8,7 +8,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,3 +20,16 @@ jobs:
         run: npm run build
       - name: Test built website and counters
         run: npm test
+      - name: Install isolated browser test tools
+        run: npm install --prefix .ci-runtime --no-save --package-lock=false --no-audit --no-fund playwright@1.64.0
+      - name: Install Chromium
+        run: .ci-runtime/node_modules/.bin/playwright install --with-deps chromium
+      - name: Verify desktop and mobile page in Chromium
+        run: node test/browser.mjs
+      - name: Save preview screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hoe-page-previews
+          path: artifacts/*.png
+          if-no-files-found: ignore

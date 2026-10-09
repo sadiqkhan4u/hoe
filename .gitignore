@@ -29,3 +29,9 @@ Thumbs.db
 .hoe/
 counters.json
 counters.json.*.tmp
+
+# Isolated CI browser tools and screenshots
+.ci-runtime/
+artifacts/
+waitlist.json
+waitlist.json.*.tmp

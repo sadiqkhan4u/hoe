@@ -1,6 +1,6 @@
 # HOE — Heaven On Earth
 
-Starter repository for the Heaven On Earth dating application. The current release is a responsive coming-soon page for the new staging website **hoe.dating**, with a server-side browser-visit counter.
+Starter repository for the Heaven On Earth dating application. The current release is a responsive coming-soon page for the new staging website **hoe.dating**, with a server-side browser-visit counter, launch countdown and protected waitlist.
 
 ## Run locally
 
@@ -20,6 +20,10 @@ See [HOSTING.md](HOSTING.md). The root package.json enables Node.js repository i
 
 The page uses the supplied HOElogo.png at a compact responsive size. Screen blending lets any black matte merge into the plum background without changing the original artwork.
 
+## Countdown and waitlist
+
+Launch: December 25, 2026 at midnight PST. The form saves launch interest privately and sends signup notifications to connect@feyros.com. See [WAITLIST.md](WAITLIST.md) for required Hostinger mail and Turnstile settings. The form stays inactive until those settings exist.
+
 ## Counter meaning and storage
 
 - **Browser visits:** one successful landing-page GET per browser session, using a session cookie. Refreshes within that session do not increment.
@@ -30,7 +34,7 @@ The page uses the supplied HOElogo.png at a compact responsive size. Screen blen
 
 ## Verification
 
-GitHub Actions builds and tests the deployment output, including session deduplication, logo serving, legacy counter migration, concurrent increments, restart persistence, private-route handling and the real server entry.
+GitHub Actions builds and tests the deployment output, including session deduplication, logo serving, legacy counter migration, concurrent increments, restart persistence, private-route handling, the real server entry, waitlist protections and countdown math. Chromium checks desktop/mobile layout and the client form flow.
 
 ## Deployment status
 

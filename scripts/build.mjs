@@ -2,7 +2,7 @@ import { cp, mkdir, writeFile } from 'node:fs/promises';
 
 const output = new URL('../dist/', import.meta.url);
 await mkdir(output, { recursive: true });
-for (const file of ['app.mjs', 'server.mjs', 'public']) {
+for (const file of ['app.mjs', 'server.mjs', 'waitlist.mjs', 'public']) {
   await cp(new URL('../' + file, import.meta.url), new URL(file, output), { recursive: true });
 }
 await writeFile(new URL('package.json', output), JSON.stringify({

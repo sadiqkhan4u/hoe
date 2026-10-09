@@ -3,6 +3,8 @@ import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
+import { createWaitlist } from './waitlist.mjs';
+import { parseLaunchAt } from './public/countdown.mjs';
 
 async function openCounters(dataDir) {
   if (!isAbsolute(dataDir)) throw new Error('COUNTER_DATA_DIR must be an absolute path.');
@@ -39,11 +41,19 @@ async function openCounters(dataDir) {
 
 export async function createApp({
   dataDir = process.env.COUNTER_DATA_DIR || join(homedir(), '.hoe', 'data'),
-  secureCookies = process.env.NODE_ENV === 'production'
+  secureCookies = process.env.NODE_ENV === 'production',
+  launchAt = process.env.LAUNCH_AT || '2026-12-25T00:00:00-08:00',
+  waitlistOptions = {}
 } = {}) {
   const counters = await openCounters(dataDir);
+  const deadline = parseLaunchAt(launchAt);
+  const waitlist = await createWaitlist({ ...waitlistOptions, dataDir, secureCookies });
   const template = await readFile(new URL('./public/index.html', import.meta.url), 'utf8');
   const logo = await readFile(new URL('./public/hoe-logo.png', import.meta.url));
+  const scripts = new Map();
+  for (const file of ['site.mjs', 'countdown.mjs']) {
+    scripts.set('/' + file, await readFile(new URL('./public/' + file, import.meta.url)));
+  }
   const cookie = (name) => name + '=1; Path=/; HttpOnly; SameSite=Lax' + (secureCookies ? '; Secure' : '');
   const seen = (request, name) => (request.headers.cookie || '').split(';').some(item => item.trim() === name + '=1');
   const format = (value) => value.toLocaleString('en-US');
@@ -52,17 +62,21 @@ export async function createApp({
     response.setHeader('Cache-Control', 'no-store');
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    response.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'; form-action 'none'");
+    response.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'self' https://challenges.cloudflare.com; connect-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
     const send = (status, body, type = 'text/plain; charset=utf-8') => {
       response.writeHead(status, { 'Content-Type': type });
       response.end(request.method === 'HEAD' ? undefined : body);
     };
     try {
       const pathname = new URL(request.url, 'http://localhost').pathname;
+      if (pathname === '/api/waitlist') return await waitlist.handle(request, response);
       if (!['GET', 'HEAD'].includes(request.method)) {
         response.setHeader('Allow', 'GET, HEAD');
         return send(405, 'Method not allowed');
       }
+      if (pathname === '/api/public-config') return send(200, JSON.stringify({ launchAt: deadline, serverTime: Date.now(), waitlist: waitlist.publicConfig() }), 'application/json');
+      if (pathname === '/api/waitlist-form') return send(200, JSON.stringify(waitlist.form(request, response)), 'application/json');
+      if (scripts.has(pathname)) return send(200, scripts.get(pathname), 'text/javascript; charset=utf-8');
       if (pathname === '/health') return send(200, '{"status":"ok"}', 'application/json');
       if (pathname === '/api/counters') return send(200, JSON.stringify(await counters.read()), 'application/json');
       if (pathname === '/hoe-logo.png') {
