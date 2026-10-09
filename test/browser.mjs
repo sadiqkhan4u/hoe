@@ -145,6 +145,7 @@ try {
     await confirmationPage.getByRole('button', { name: 'Confirm my email' }).click();
     const nativeReply = await confirmationReply;
     assert.equal(nativeReply.request().headers().origin, confirmationOrigin);
+    assert.doesNotMatch(nativeReply.request().headers().referer || '', /\/confirm|token=/);
     assert.equal(nativeReply.status(), 200);
     await confirmationPage.locator('p').filter({ hasText: /email is confirmed/i }).waitFor();
     assert.equal(mails.length, 2);
