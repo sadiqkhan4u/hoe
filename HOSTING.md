@@ -1,40 +1,46 @@
-# Hostinger staging — hoe.dating
+# Hostinger staging: hoe.dating
 
-## Status
+Import the existing **sadiqkhan4u/hoe** GitHub repository as a **Node.js web app** for the new staging website.
 
-The repository is initialized on `main`. The Hostinger connection has **not been completed or verified**.
+## Import settings
 
-- GitHub repository: https://github.com/sadiqkhan4u/hoe
-- Branch: `main`
-- Requested target: a new staging website at `hoe.dating`
-- Existing website: `heavenonearth.app` is not part of this staging change
+| Setting | Value |
+| --- | --- |
+| Repository | https://github.com/sadiqkhan4u/hoe |
+| Branch | main |
+| Project root | repository root (leave blank or use .) |
+| Framework | Other — backend Node.js app |
+| Node.js version | 22.x |
+| Package manager | npm |
+| Build command | npm run build |
+| Output directory | dist |
+| Entry file | server.mjs |
+| Start command, if shown | npm start |
+| Domain | hoe.dating |
 
-The repository currently contains documentation only; there is no runnable application or page to deploy yet. Choose the hosting type and application framework before adding deployment commands.
+The build places server.mjs, app.mjs, package.json and public/index.html into dist. server.mjs also exists at repository root, so it works whether the panel resolves the entry relative to the root or built output. The root start command uses dist/server.mjs; the built package's start command uses server.mjs. The server listens on Hostinger's PORT and 0.0.0.0. Do not manually override PORT.
 
-## Connection options
+Refresh the repository list and reselect hoe after this update. The missing-package.json message should clear once Hostinger reads the new main branch.
 
-### Custom HTML/PHP web hosting
+## Counter data
 
-1. In Hostinger hPanel, create or select the new staging website for `hoe.dating`.
-2. Open its Dashboard → Advanced → Git.
-3. Connect GitHub and grant Hostinger access to this repository only where that choice is offered.
-4. Select `sadiqkhan4u/hoe`, branch `main`.
-5. Verify that the deployment target belongs to `hoe.dating` (normally its `public_html` directory).
-6. Add and review the initial website files before the first deployment, then verify a successful deployment record and the staging page.
+Before launch, set:
 
-### Managed Node.js web app
+- NODE_ENV=production
+- COUNTER_DATA_DIR=an absolute writable path outside hbuilds and public_html
 
-After a supported application has been added to this repository, use Websites → Create Website → Web App → Import Git Repository. Select this repository and `main`, verify the framework/build/start settings, and deploy to a staging preview before connecting `hoe.dating`.
+Choose the actual path using the account's filesystem; do not paste an invented account username. If omitted, the server uses the home directory's .hoe/data folder. Verify that directory is writable and survives deployment. Back it up periodically. This single-process file store is suitable for the coming-soon page; use a shared database for a scaled app.
 
-Hostinger's managed Node.js app hosting requires a compatible hosting plan. AI Builder websites do not support the standard Git integration. Confirm the hosting type in hPanel rather than assuming one.
+## Verify deployment
 
-## Domain and verification
+1. Confirm the Hostinger build finishes successfully.
+2. Open /health and expect {"status":"ok"}.
+3. Open the homepage and verify the mobile and desktop layout.
+4. Refresh within the same browser session: visits should stay unchanged.
+5. Click Visit Filmymantra: verify it opens https://filmymantra.com/. Returning and repeating in the same browser session should not add another click.
+6. Redeploy and check that totals persist.
+7. Attach hoe.dating to this new site, complete the DNS records supplied by Hostinger, and verify HTTPS.
 
-Connect `hoe.dating` to the new staging website using the domain settings offered by the selected Hostinger product. Check current DNS and domain ownership before any DNS changes. Confirm HTTPS, the repository and branch shown in Hostinger, and a successful deployment before treating the connection as complete.
+The GitHub build tests verify the app, not the Hostinger account configuration. Domain ownership, DNS, HTTPS and live deployment remain unverified until checked in hPanel.
 
-Keep credentials and environment values in hosting settings, never in repository files. Do not change the existing site's repository connection or hosting configuration while setting up staging.
-
-## Official references
-
-- [Hostinger Git deployment](https://www.hostinger.com/support/1583302-how-to-deploy-a-git-repository-in-hostinger/)
-- [Hostinger Node.js web apps](https://www.hostinger.com/support/how-to-deploy-a-nodejs-website-in-hostinger/)
+Official guide: https://www.hostinger.com/support/how-to-deploy-a-nodejs-website-in-hostinger/

@@ -24,3 +24,8 @@ __pycache__/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Runtime counter data
+.hoe/
+counters.json
+counters.json.*.tmp
