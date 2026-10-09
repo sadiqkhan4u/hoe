@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -26,7 +26,9 @@ test('landing page works; refresh and HEAD do not double-count a browser session
   const html = await page.text();
   assert.match(html, /Coming soon/);
   assert.match(html, /Work in progress/);
-  assert.match(html, /href="\/filmymantra"/);
+  assert.match(html, /src="\/hoe-logo.png"/);
+  assert.match(html, /Browser visits/);
+  assert.doesNotMatch(html, /filmymantra|link clicks/i);
   assert.doesNotMatch(html, /\{\{/);
   assert.match(page.headers.get('cache-control'), /no-store/);
   const cookie = page.headers.get('set-cookie').split(';')[0];
@@ -34,27 +36,24 @@ test('landing page works; refresh and HEAD do not double-count a browser session
   await fetch(url, { headers: { Cookie: cookie } });
   const head = await fetch(url, { method: 'HEAD' });
   assert.equal(await head.text(), '');
-  assert.deepEqual(await (await fetch(url + '/api/counters')).json(), { visits: 1, clicks: 0 });
+  assert.deepEqual(await (await fetch(url + '/api/counters')).json(), { visits: 1 });
 });
 
-test('Filmymantra redirect counts clicks once per session and never counts HEAD requests', async t => {
+test('retired outgoing route has no redirect and no click metric', async t => {
   const { url } = await fixture(t);
-  await fetch(url + '/filmymantra', { method: 'HEAD', redirect: 'manual' });
   const response = await fetch(url + '/filmymantra', { redirect: 'manual' });
-  assert.equal(response.status, 302);
-  assert.equal(response.headers.get('location'), 'https://filmymantra.com/');
-  const cookie = response.headers.get('set-cookie').split(';')[0];
-  await fetch(url + '/filmymantra', { redirect: 'manual', headers: { Cookie: cookie } });
-  assert.deepEqual(await (await fetch(url + '/api/counters')).json(), { visits: 0, clicks: 1 });
+  assert.equal(response.status, 404);
+  assert.equal(response.headers.get('location'), null);
+  assert.deepEqual(await (await fetch(url + '/api/counters')).json(), { visits: 0 });
 });
 
 test('concurrent visits persist accurately across application restart', async t => {
   const { url, directory, server } = await fixture(t);
   await Promise.all(Array.from({ length: 20 }, () => fetch(url)));
-  assert.deepEqual(await (await fetch(url + '/api/counters')).json(), { visits: 20, clicks: 0 });
+  assert.deepEqual(await (await fetch(url + '/api/counters')).json(), { visits: 20 });
   await new Promise(resolve => { server.close(resolve); server.closeAllConnections(); });
   const restarted = await fixture(t, directory);
-  assert.deepEqual(await (await fetch(restarted.url + '/api/counters')).json(), { visits: 20, clicks: 0 });
+  assert.deepEqual(await (await fetch(restarted.url + '/api/counters')).json(), { visits: 20 });
 });
 
 test('private files and unsupported methods are not exposed', async t => {
@@ -65,7 +64,7 @@ test('private files and unsupported methods are not exposed', async t => {
   const response = await fetch(url, { method: 'POST' });
   assert.equal(response.status, 405);
   assert.equal(response.headers.get('allow'), 'GET, HEAD');
-  assert.deepEqual(await (await fetch(url + '/api/counters')).json(), { visits: 0, clicks: 0 });
+  assert.deepEqual(await (await fetch(url + '/api/counters')).json(), { visits: 0 });
 });
 
 test('invalid saved data causes a clear startup failure rather than resetting totals', async () => {
@@ -107,17 +106,14 @@ test('actual deployment entry starts on PORT and serves the health endpoint', as
   assert.deepEqual(await response.json(), { status: 'ok' });
 });
 
-test('failed counter writes keep the homepage and outgoing link usable', async t => {
+test('failed counter writes keep the homepage usable', async t => {
   const { url, directory } = await fixture(t);
   await rm(directory, { recursive: true, force: true });
   await writeFile(directory, 'The directory is no longer writable.');
   const response = await fetch(url);
   assert.equal(response.status, 200);
   assert.match(await response.text(), /Unavailable/);
-  const redirect = await fetch(url + '/filmymantra', { redirect: 'manual' });
-  assert.equal(redirect.status, 302);
-  assert.equal(redirect.headers.get('location'), 'https://filmymantra.com/');
-  assert.equal(redirect.headers.get('set-cookie'), null);
+  assert.equal(response.headers.get('set-cookie'), null);
 });
 
 test('production session cookies include Secure, HttpOnly and SameSite', async t => {
@@ -132,4 +128,29 @@ test('production session cookies include Secure, HttpOnly and SameSite', async t
   const cookie = response.headers.get('set-cookie');
   for (const flag of ['Secure', 'HttpOnly', 'SameSite=Lax']) assert.ok(cookie.includes(flag));
   assert.ok(!/Expires|Max-Age/.test(cookie));
+});
+
+test('supplied logo is served unchanged as PNG without incrementing visits', async t => {
+  const { url } = await fixture(t);
+  const expected = await readFile(new URL('../dist/public/hoe-logo.png', import.meta.url));
+  const response = await fetch(url + '/hoe-logo.png');
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-type'), 'image/png');
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()), expected);
+  assert.equal(expected.readUInt32BE(16), 1774);
+  assert.equal(expected.readUInt32BE(20), 887);
+  const head = await fetch(url + '/hoe-logo.png', { method: 'HEAD' });
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), '');
+  assert.deepEqual(await (await fetch(url + '/api/counters')).json(), { visits: 0 });
+});
+
+test('legacy counter storage retains visits and retires click totals on next write', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'hoe-migrate-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(join(directory, 'counters.json'), JSON.stringify({ visits: 147, clicks: 28 }));
+  const { url } = await fixture(t, directory);
+  assert.deepEqual(await (await fetch(url + '/api/counters')).json(), { visits: 147 });
+  await fetch(url);
+  assert.deepEqual(JSON.parse(await readFile(join(directory, 'counters.json'), 'utf8')), { visits: 148 });
 });

@@ -37,10 +37,10 @@ Choose the actual path using the account's filesystem; do not paste an invented 
 2. Open /health and expect {"status":"ok"}.
 3. Open the homepage and verify the mobile and desktop layout.
 4. Refresh within the same browser session: visits should stay unchanged.
-5. Click Visit Filmymantra: verify it opens https://filmymantra.com/. Returning and repeating in the same browser session should not add another click.
+5. Verify the supplied logo is compact and blends into the page on mobile and desktop. The page and counters API should show only browser visits.
 6. Redeploy and check that totals persist.
 7. Attach hoe.dating to this new site, complete the DNS records supplied by Hostinger, and verify HTTPS.
 
-The GitHub build tests verify the app, not the Hostinger account configuration. Domain ownership, DNS, HTTPS and live deployment remain unverified until checked in hPanel.
+The GitHub build tests verify the app, not the Hostinger account configuration. The initial deployment is confirmed by the supplied Hostinger success screen. Public DNS/HTTPS and counter persistence still need independent verification.
 
 Official guide: https://www.hostinger.com/support/how-to-deploy-a-nodejs-website-in-hostinger/
