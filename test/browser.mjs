@@ -43,12 +43,14 @@ try {
   }
 
   // A stalled configuration request must not stop the countdown or leave "checking" forever.
-  for (const failure of ['stalled', 'html']) {
+  for (const failure of ['stalled', 'html', 'empty-json', 'bad-deadline']) {
     const page = await browser.newPage({ viewport: { width: 393, height: 1000 } });
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.route('**/api/public-config', async route => {
       if (failure === 'html') return route.fulfill({ status: 404, contentType: 'text/html', body: '<h1>Not found</h1>' });
+      if (failure === 'empty-json') return route.fulfill({ json: {} });
+      if (failure === 'bad-deadline') return route.fulfill({ json: { launchAt: 'not-a-date', serverTime: Date.now(), waitlist: { available: false } } });
       // Holding the route simulates a connection that never answers.
     });
     await page.goto(url, { waitUntil: 'domcontentloaded' });

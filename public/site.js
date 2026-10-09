@@ -106,6 +106,7 @@ function loadChallenge(siteKey) {
   });
 }
 function startCountdown(launchAt, serverTime) {
+  launchAt = parseLaunchAt(launchAt);
   clearInterval(countdownTimer);
   const clockOffset = Number.isFinite(serverTime) ? serverTime - Date.now() : 0;
   const label = document.querySelector('#countdown-label');
@@ -172,7 +173,12 @@ startCountdown(date.dateTime || null, Number(date.dataset.serverTime));
 message.textContent = 'Checking waitlist availability…';
 (async () => {
 try {
-  config = await fetchJSON('/api/public-config', { cache: 'no-store' });
+  const incoming = await fetchJSON('/api/public-config', { cache: 'no-store' });
+  if (!incoming || !Object.prototype.hasOwnProperty.call(incoming, 'launchAt') ||
+      !Number.isFinite(incoming.serverTime) || typeof incoming.waitlist?.available !== 'boolean' ||
+      (incoming.waitlist.available && (typeof incoming.waitlist.siteKey !== 'string' || !incoming.waitlist.siteKey))) throw new Error(unavailable);
+  try { parseLaunchAt(incoming.launchAt); } catch { throw new Error(unavailable); }
+  config = incoming;
   startCountdown(config.launchAt, config.serverTime);
   if (config.waitlist.available) {
     await refreshForm();
