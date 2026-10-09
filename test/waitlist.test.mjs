@@ -20,7 +20,7 @@ async function fixture(t, options = {}) {
         success: true, hostname: 'hoe.dating', action: 'waitlist'
       }), { status: 200 });
     }
-    if (options.mailFails) throw new Error('Provider timed out');
+    if (options.mailFails || options.teamMailFails && JSON.parse(init.body).to[0] === 'connect@feyros.com') throw new Error('Provider timed out');
     return new Response('{}', { status: 200 });
   };
   const server = await createApp({
@@ -44,33 +44,74 @@ async function fixture(t, options = {}) {
     }, body: JSON.stringify({ email: 'person@example.com', consent: true, website: '',
       nonce: state.nonce, turnstileToken: 'a-valid-token', ...fields }) });
   }
-  return { url, directory, calls, form, submit, server, advance: milliseconds => { clock += milliseconds; } };
+  async function confirm(token, headers = {}) {
+    return fetch(url + '/confirm', { method: 'POST', headers: {
+      'Content-Type': 'application/x-www-form-urlencoded', Origin: configuration.origin, ...headers
+    }, body: new URLSearchParams({ token }) });
+  }
+  return { url, directory, calls, form, submit, confirm, server, advance: milliseconds => { clock += milliseconds; } };
 }
 const mailCalls = calls => calls.filter(call => call.url.includes('api.mail.hostinger.com'));
 const records = async directory => JSON.parse(await readFile(join(directory, 'waitlist.json'), 'utf8'));
 
-test('valid signup is stored privately and notifies only connect@feyros.com', async t => {
+const confirmationToken = calls => {
+  const mail = mailCalls(calls).find(call => JSON.parse(call.init.body).subject === 'Confirm your HOE waitlist email');
+  return new URL(JSON.parse(mail.init.body).text.match(/https:\/\/hoe\.dating\/confirm\?token=[A-Za-z0-9_-]+/)[0]).searchParams.get('token');
+};
+
+test('signup sends a private confirmation to the submitted address, not the team', async t => {
   const f = await fixture(t);
-  const state = await f.form();
-  const response = await f.submit(state, { email: ' Person+HOE@Example.com ' });
+  const response = await f.submit(await f.form(), { email: ' Person+HOE@Example.com ' });
   assert.equal(response.status, 200);
+  assert.match((await response.json()).message, /Check your inbox/);
   const entries = await records(f.directory);
   assert.equal(entries.length, 1);
   assert.equal(entries[0].email, 'person+hoe@example.com');
-  assert.equal(entries[0].notification, 'sent');
+  assert.equal(entries[0].verifiedAt, null);
+  assert.equal(entries[0].notification, 'pending');
+  assert.equal(entries[0].confirmation.attempts[0].status, 'sent');
   assert.equal(entries[0].consent, 'hoe-launch-updates-v1');
   const mail = mailCalls(f.calls);
   assert.equal(mail.length, 1);
   const payload = JSON.parse(mail[0].init.body);
-  assert.deepEqual(payload.to, ['connect@feyros.com']);
+  assert.deepEqual(payload.to, ['person+hoe@example.com']);
   assert.equal(payload.html, undefined);
-  assert.match(payload.text, /person\+hoe@example.com/);
   assert.equal(mail[0].init.headers.Authorization, 'Bearer private-mail-token');
+  const token = confirmationToken(f.calls);
+  assert.match(token, /^[A-Za-z0-9_-]{43}$/);
+  assert.match(entries[0].confirmation.hash, /^[a-f0-9]{64}$/);
+  assert.doesNotMatch(await readFile(join(f.directory, 'waitlist.json'), 'utf8'), new RegExp(token));
   assert.deepEqual(await (await fetch(f.url + '/api/counters')).json(), { visits: 0 });
   assert.equal((await fetch(f.url + '/waitlist.json')).status, 404);
 });
 
-test('simultaneous duplicates produce one record and one notification with identical public replies', async t => {
+test('only explicit confirmation verifies email access and sends one team notice', async t => {
+  const f = await fixture(t);
+  await f.submit(await f.form());
+  const token = confirmationToken(f.calls);
+  const preview = await fetch(f.url + '/confirm?token=' + token);
+  assert.equal(preview.status, 200);
+  assert.match(await preview.text(), /Confirm my email/);
+  assert.equal(preview.headers.get('referrer-policy'), 'no-referrer');
+  assert.equal((await fetch(f.url + '/confirm?token=' + token, { method: 'HEAD' })).status, 200);
+  assert.equal((await records(f.directory))[0].verifiedAt, null);
+  assert.equal(mailCalls(f.calls).length, 1);
+  assert.deepEqual(await (await fetch(f.url + '/api/counters')).json(), { visits: 0 });
+  const responses = await Promise.all([f.confirm(token), f.confirm(token)]);
+  assert.ok(responses.every(response => response.status === 200));
+  const entry = (await records(f.directory))[0];
+  assert.equal(entry.verifiedAt, '2026-10-08T12:00:00.000Z');
+  assert.equal(entry.notification, 'sent');
+  const notice = JSON.parse(mailCalls(f.calls)[1].init.body);
+  assert.deepEqual(notice.to, ['connect@feyros.com']);
+  assert.match(notice.text, /Verified: 2026-10-08T12:00:00.000Z/);
+  assert.match(notice.text, /does not verify their identity or trustworthiness/);
+  assert.equal((await f.confirm(token)).status, 200);
+  await f.submit(await f.form());
+  assert.equal(mailCalls(f.calls).length, 2);
+});
+
+test('simultaneous duplicates produce one record and one confirmation email with identical public replies', async t => {
   const f = await fixture(t);
   const state = await f.form();
   const responses = await Promise.all([f.submit(state), f.submit(state)]);
@@ -167,7 +208,7 @@ test('uncertain delivery is persisted without automatic resend on duplicate sign
   const f = await fixture(t, { mailFails: true });
   const state = await f.form();
   assert.equal((await f.submit(state)).status, 200);
-  assert.equal((await records(f.directory))[0].notification, 'uncertain');
+  assert.equal((await records(f.directory))[0].confirmation.attempts[0].status, 'uncertain');
   assert.equal((await f.submit(state)).status, 200);
   assert.equal(mailCalls(f.calls).length, 1);
 });
@@ -223,4 +264,133 @@ test('global submission limit also covers fresh browser sessions', async t => {
   }
   assert.equal((await f.submit(await f.form())).status, 429);
   assert.equal(mailCalls(f.calls).length, 0);
+});
+
+test('expired and tampered confirmation links cannot verify or notify', async t => {
+  const f = await fixture(t);
+  await f.submit(await f.form());
+  const token = confirmationToken(f.calls);
+  const tampered = (token[0] === 'A' ? 'B' : 'A') + token.slice(1);
+  assert.equal((await f.confirm(tampered)).status, 400);
+  assert.equal((await fetch(f.url + '/confirm?token=' + encodeURIComponent('<script>alert(1)</script>'))).status, 400);
+  f.advance(24 * 60 * 60000);
+  assert.equal((await f.confirm(token)).status, 400);
+  assert.equal((await fetch(f.url + '/confirm?token=' + token)).status, 400);
+  assert.equal((await records(f.directory))[0].verifiedAt, null);
+  assert.equal(mailCalls(f.calls).length, 1);
+});
+
+test('confirmation POST requires the canonical origin and a bounded form body', async t => {
+  const f = await fixture(t);
+  await f.submit(await f.form());
+  const token = confirmationToken(f.calls);
+  assert.equal((await f.confirm(token, { Origin: 'https://attacker.example' })).status, 403);
+  assert.equal((await f.confirm(token, { Origin: '' })).status, 403);
+  assert.equal((await f.confirm(token, { 'Content-Type': 'text/plain' })).status, 415);
+  const large = await fetch(f.url + '/confirm', { method: 'POST', headers: {
+    'Content-Type': 'application/x-www-form-urlencoded', Origin: configuration.origin
+  }, body: 'token=' + 'x'.repeat(5000) });
+  assert.equal(large.status, 413);
+  const duplicate = await fetch(f.url + '/confirm', { method: 'POST', headers: {
+    'Content-Type': 'application/x-www-form-urlencoded', Origin: configuration.origin
+  }, body: new URLSearchParams([['token', token], ['token', token]]) });
+  assert.equal(duplicate.status, 400);
+  assert.equal((await fetch(f.url + '/confirm?token=' + token, { method: 'PUT' })).status, 405);
+  assert.equal((await records(f.directory))[0].verifiedAt, null);
+  assert.equal(mailCalls(f.calls).length, 1);
+});
+
+test('confirmation tokens survive restart but team notice and verification cannot replay', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'hoe-confirm-restart-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const first = await fixture(t, { directory });
+  await first.submit(await first.form());
+  const token = confirmationToken(first.calls);
+  await new Promise(resolve => { first.server.close(resolve); first.server.closeAllConnections(); });
+  const next = await fixture(t, { directory });
+  assert.equal((await next.confirm(token)).status, 200);
+  assert.equal(mailCalls(next.calls).length, 1);
+  await new Promise(resolve => { next.server.close(resolve); next.server.closeAllConnections(); });
+  const third = await fixture(t, { directory });
+  assert.equal((await third.confirm(token)).status, 200);
+  assert.equal(mailCalls(third.calls).length, 0);
+});
+
+test('explicit resubmission allows a bounded resend after cooldown and invalidates the old token', async t => {
+  const f = await fixture(t, { mailFails: true });
+  await f.submit(await f.form());
+  const original = confirmationToken(f.calls);
+  assert.equal((await f.submit(await f.form())).status, 200);
+  assert.equal(mailCalls(f.calls).length, 1);
+  f.advance(15 * 60000);
+  await f.submit(await f.form());
+  assert.equal(mailCalls(f.calls).length, 2);
+  assert.equal((await f.confirm(original)).status, 400);
+  f.advance(15 * 60000);
+  await f.submit(await f.form());
+  f.advance(15 * 60000);
+  await f.submit(await f.form());
+  assert.equal(mailCalls(f.calls).length, 3);
+  const entry = (await records(f.directory))[0];
+  assert.equal(entry.confirmation.attempts.length, 3);
+  assert.ok(entry.confirmation.attempts.every(attempt => attempt.status === 'uncertain'));
+});
+
+test('persistent daily cap limits confirmation sends but never blocks a valid confirmation', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'hoe-confirm-cap-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const first = await fixture(t, { directory, config: { dailyLimit: 1 } });
+  await first.submit(await first.form());
+  const token = confirmationToken(first.calls);
+  await new Promise(resolve => { first.server.close(resolve); first.server.closeAllConnections(); });
+  const next = await fixture(t, { directory, config: { dailyLimit: 1 } });
+  assert.equal((await next.submit(await next.form(), { email: 'second@example.com' })).status, 429);
+  assert.equal((await next.confirm(token)).status, 200);
+  assert.equal(mailCalls(next.calls).length, 1);
+  assert.deepEqual(JSON.parse(mailCalls(next.calls)[0].init.body).to, ['connect@feyros.com']);
+});
+
+test('legacy signups remain unverified until they explicitly request and complete confirmation', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'hoe-legacy-confirm-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const legacy = { id: 'legacy-id', email: 'person@example.com', joinedAt: '2026-10-01T00:00:00Z',
+    consentAt: '2026-10-01T00:00:00Z', consent: 'hoe-launch-updates-v1',
+    attemptedAt: '2026-10-01T00:00:00Z', notification: 'sent' };
+  await writeFile(join(directory, 'waitlist.json'), JSON.stringify([legacy]));
+  const f = await fixture(t, { directory });
+  assert.equal(mailCalls(f.calls).length, 0);
+  assert.deepEqual(await records(directory), [legacy]);
+  await f.submit(await f.form());
+  const pending = (await records(directory))[0];
+  assert.equal(pending.verifiedAt, null);
+  assert.equal(pending.legacyNotification.status, 'sent');
+  assert.equal(pending.joinedAt, legacy.joinedAt);
+  assert.deepEqual(JSON.parse(mailCalls(f.calls)[0].init.body).to, ['person@example.com']);
+  await f.confirm(confirmationToken(f.calls));
+  assert.equal(mailCalls(f.calls).length, 2);
+  assert.equal((await records(directory))[0].notification, 'sent');
+});
+
+test('ambiguous team delivery is recorded once and never automatically retried', async t => {
+  const f = await fixture(t, { teamMailFails: true });
+  await f.submit(await f.form());
+  const token = confirmationToken(f.calls);
+  assert.equal((await f.confirm(token)).status, 200);
+  const entry = (await records(f.directory))[0];
+  assert.ok(entry.verifiedAt);
+  assert.equal(entry.notification, 'uncertain');
+  assert.equal((await f.confirm(token)).status, 200);
+  assert.equal(mailCalls(f.calls).length, 2);
+});
+
+test('corrupt confirmation hashes fail startup without overwriting storage', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'hoe-corrupt-confirm-'));
+  const text = JSON.stringify([{ version: 2, id: 'id', email: 'person@example.com', joinedAt: '2026-10-08T12:00:00Z',
+    verifiedAt: null, notification: 'pending', confirmation: { hash: 'raw-token', expiresAt: '2026-10-09T12:00:00Z',
+      attempts: [{ attemptedAt: '2026-10-08T12:00:00Z', status: 'sent' }] } }]);
+  try {
+    await writeFile(join(directory, 'waitlist.json'), text);
+    await assert.rejects(createApp({ dataDir: directory }), /Invalid waitlist data/);
+    assert.equal(await readFile(join(directory, 'waitlist.json'), 'utf8'), text);
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });

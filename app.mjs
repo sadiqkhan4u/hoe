@@ -69,6 +69,7 @@ export async function createApp({
     };
     try {
       const pathname = new URL(request.url, 'http://localhost').pathname;
+      if (pathname === '/confirm') return await waitlist.handleConfirmation(request, response);
       if (pathname === '/api/waitlist') return await waitlist.handle(request, response);
       if (!['GET', 'HEAD'].includes(request.method)) {
         response.setHeader('Allow', 'GET, HEAD');

@@ -12,7 +12,7 @@ async function check(path, inspect) {
 let liveReady = false;
 for (let attempt = 1; attempt <= 6; attempt++) {
   const [page, health, config, script] = await Promise.all([
-    check('/', (_, body) => ({ latestScript: body.includes('/site.js?v=20261009-1'), renderedCountdown: /id="days">\d+<\/strong>/.test(body) })),
+    check('/', (_, body) => ({ latestScript: body.includes('/site.js?v=20261009-2'), renderedCountdown: /id="days">\d+<\/strong>/.test(body) })),
     check('/health', (_, body) => { try { return { healthy: JSON.parse(body).status === 'ok' }; } catch { return { healthy: false }; } }),
     check('/api/public-config', (_, body) => {
       try {
@@ -20,9 +20,9 @@ for (let attempt = 1; attempt <= 6; attempt++) {
         return { validConfig: typeof value.launchAt === 'string', waitlistAvailable: value.waitlist?.available === true };
       } catch { return { validConfig: false, waitlistAvailable: false }; }
     }),
-    check('/site.js?v=20261009-1', (response, body) => ({
+    check('/site.js?v=20261009-2', (response, body) => ({
       javascriptType: /javascript/.test(response.headers.get('content-type') || ''),
-      expectedScript: body.includes("Object.prototype.hasOwnProperty.call(incoming, 'launchAt')")
+      expectedScript: body.includes("appearance: 'interaction-only'")
     }))
   ]);
   console.log(JSON.stringify({ attempt, page, health, config, script }));

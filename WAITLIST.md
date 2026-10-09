@@ -1,48 +1,53 @@
-# Countdown and protected launch waitlist
+# Countdown and verified launch waitlist
 
-The default launch is **December 25, 2026 at 00:00 PST**, equivalent to **2026-12-25T08:00:00Z**. Override LAUNCH_AT only with an ISO timestamp including a timezone.
+The launch is December 25, 2026 at 00:00 PST (2026-12-25T08:00:00Z). LAUNCH_AT accepts an ISO timestamp with timezone.
 
-## Activate the form in Hostinger
+## Hostinger settings
 
-Keep NODE_ENV=production and APP_ORIGIN=https://hoe.dating.
+Use NODE_ENV=production and APP_ORIGIN=https://hoe.dating. The existing credentials support both subscriber confirmation and verified team notifications. No new service or key is needed.
 
-1. In Cloudflare Turnstile, create a managed widget named HOE Waitlist for hostname hoe.dating.
-2. Add TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY to Hostinger environment variables.
-3. Generate a separate Hostinger Mail API key for the mail order containing connect@feyros.com. The app cannot reuse this chat's connector credentials.
-4. Add HOSTINGER_MAIL_API_TOKEN privately in Hostinger.
-5. Set HOSTINGER_MAILBOX_ID privately in Hostinger to the resourceId of connect@feyros.com. Obtain it from the Hostinger Mail API GET /api/v1/me response. Do not put your account's mailbox identifier in this public repository.
-6. Configure COUNTER_DATA_DIR to a writable persistent directory outside hbuilds/public_html.
-7. Redeploy and perform one real signup using an address you control. Check the notification in connect@feyros.com.
+- TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY: Managed Cloudflare widget for hoe.dating.
+- HOSTINGER_MAIL_API_TOKEN: private Mail API token for the order containing connect@feyros.com.
+- HOSTINGER_MAILBOX_ID: private resourceId of that mailbox, obtainable through Mail API GET /api/v1/me. Never publish account identifiers.
+- COUNTER_DATA_DIR: writable persistent directory outside deployment builds.
+- WAITLIST_DAILY_LIMIT: default 100 confirmation-email attempts per UTC day, persisted across restarts. Confirmed signups can generate one additional team notification each.
 
-Do not paste secret keys into chat, source files, screenshots or GitHub. Only the public Turnstile site key is exposed to visitors. Until all four mail/bot settings exist, the page displays "The waitlist opens soon" and rejects submissions. No signup is falsely accepted while delivery/protection is unconfigured.
+Save variables in the website dashboard, Apply changes, and deploy latest main. Never paste secrets into chat, screenshots or GitHub.
 
-## Spam protection
+## Email ownership confirmation
 
-- Required server-side Turnstile verification, including hostname and action.
-- Signed form nonce bound to an HttpOnly/SameSite browser cookie, with minimum form age and expiry.
-- Matching request Origin; small JSON-only payloads; email validation and explicit consent.
-- Hidden bot-trap input, five attempts per browser session per fifteen minutes, and thirty submissions per server per minute.
-- Serialized duplicate checks and atomic writes. Existing addresses receive the same public response without another notification.
-- Default daily cap of 100 new notification attempts, persisted across restarts. Adjust WAITLIST_DAILY_LIMIT deliberately.
-- Fixed notification destination, plain-text body and fixed subject prevent arbitrary email forwarding or header injection.
-- No reliance on spoofable forwarded-IP headers or raw visitor IP storage.
+1. Visitor enters an email, agrees to launch updates and passes server-validated Turnstile.
+2. The app stores a pending signup and sends a confirmation link to that address from the configured mailbox.
+3. The link opens a page with a Confirm my email button. GET/HEAD requests never verify a signup, avoiding accidental confirmation by link scanners.
+4. An explicit confirmation POST consumes the action, records verifiedAt, then notifies connect@feyros.com with a verified signup.
+5. Only records with verifiedAt belong in the confirmed launch mailing list.
 
-A bot check does not establish email ownership. These are consented interest signups, not a double-opt-in mailing audience. Add ownership confirmation and unsubscribe links before sending a wider subscriber campaign. The feature does not monitor unrelated incoming mailbox spam.
+Links expire in 24 hours. A random 256-bit token is emailed; only its SHA-256 hash is stored privately. Replay cannot trigger another notification. The confirmation page uses no-referrer and has no third-party assets.
 
-## Private storage and email delivery
+Existing records remain unchanged and unverified on startup. Their owners can submit again to receive a confirmation. No bulk mail or retroactive verification is performed. A migrated legacy signup preserves its original notification history.
 
-The app stores waitlist.json beside counters.json in the private data directory. Records include email, signup/consent timestamp and notification state. They are never served through public routes. Back up this directory; use a database before running multiple workers.
+## Resends and uncertain delivery
 
-A notification attempt is recorded before sending. "sent" means the mail API accepted the request, not independent proof of inbox delivery. "uncertain" or a leftover "sending" state needs operator review. Ambiguous provider timeouts are not automatically resent, to avoid duplicate mail. The signup remains saved. Inspect private storage and mailbox before any manual resend.
+A new form submission can resend a pending confirmation after 15 minutes, at most three attempts per address per rolling 24 hours. This replaces the prior token. Confirmed duplicate signups do not generate additional mail.
 
-To honor removal requests sent to connect@feyros.com, stop the app, remove the matching record from the private waitlist.json file without changing other records, then restart. Do not post the file publicly.
+Send claims are saved before contacting the provider. Sending/uncertain status requires private review; the provider may already have accepted the request. There are no automatic mail retries.
 
-## Verification
+## Spam safeguards
 
-CI builds the deployed files, tests the real HTTP endpoints with mocked mail/security providers and verifies desktop/mobile behavior in Chromium. Tests cover duplicate/concurrent signups, nonce/cookie/origin validation, missing config, spam trap, rate limits, payload bounds, storage failure, uncertain delivery, restart behavior and countdown math. Provider mocks do not prove live key configuration or real inbox delivery. CI preview screenshots are attached to the workflow run.
+Server-side Turnstile hostname/action verification, signed cookie-bound form nonce, minimum form age, matching Origin, small bounded payloads, strict email validation, explicit consent, honeypot, per-session/global limits and persistent confirmation-mail caps remain active.
 
-Official references:
-- https://developers.cloudflare.com/turnstile/get-started/server-side-validation/
-- https://developers.cloudflare.com/turnstile/get-started/client-side-rendering/
-- https://developers.cloudflare.com/turnstile/reference/content-security-policy/
-- Hostinger Email API schema, discovered through the connected Hostinger Mail API documentation: https://api.mail.hostinger.com
+Cloudflare has no icon-size widget. A small shield/protection label is shown, while the genuine challenge appears only if interaction is needed. Wider screens use native normal size 300×65; narrow screens use compact 150×140. The challenge is not cropped or scaled.
+
+Confirmation proves access to the inbox at that time. It does not establish real-world identity, reject all disposable addresses or determine whether someone is honest. Keep bot checks and rate limits.
+
+## Private data and validation
+
+waitlist.json remains private with atomic serialized writes for one Node process. Back it up before manual removal or repairs. Honor removal requests at connect@feyros.com. Filter launch contacts by verifiedAt, excluding all pending/legacy records. Migrate to a transactional shared database before adding multiple processes or replicas.
+
+CI tests token hashing, expiry/replay, scanner-safe GET, confirmation POST, duplicates, resends, storage failure, legacy/restart behavior and mail limits with provider mocks. Browser tests cover desktop/mobile signup and confirmation. Live checks never submit an address or send email; test actual inbox delivery yourself with an address you control.
+
+References:
+- [Cloudflare widget options](https://developers.cloudflare.com/turnstile/get-started/client-side-rendering/widget-configurations/)
+- [Cloudflare server-side validation](https://developers.cloudflare.com/turnstile/get-started/server-side-validation/)
+- [Confirmation-based signup](https://mailchimp.com/help/about-double-opt-in/)
+- [Hostinger Mail API](https://api.mail.hostinger.com)

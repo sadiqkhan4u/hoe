@@ -94,7 +94,7 @@ function loadChallenge(siteKey) {
       clearTimeout(timeout);
       try {
         widgetId = window.turnstile.render('#bot-check', {
-          sitekey: siteKey, action: 'waitlist', theme: 'dark', size: 'compact', appearance: 'always',
+          sitekey: siteKey, action: 'waitlist', theme: 'dark', size: window.matchMedia('(min-width: 360px)').matches ? 'normal' : 'compact', appearance: 'interaction-only',
           callback: value => { token = value; updateButton(); message.textContent = ''; },
           'expired-callback': () => { token = ''; updateButton(); message.textContent = 'Please complete the security check again.'; },
           'error-callback': () => { token = ''; updateButton(); message.textContent = 'Please refresh to retry the security check.'; }

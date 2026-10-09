@@ -1,7 +1,7 @@
 name: Verify HOE starter
 on:
   push:
-    branches: [main]
+    branches: [main, 'codex/**']
   pull_request:
 permissions:
   contents: read
@@ -27,6 +27,7 @@ jobs:
       - name: Verify desktop and mobile page in Chromium
         run: node test/browser.mjs
       - name: Check live deployment without revealing private settings
+        if: github.ref == 'refs/heads/main'
         run: node test/deployment.mjs
       - name: Save preview screenshots
         if: always()

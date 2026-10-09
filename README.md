@@ -22,7 +22,7 @@ The page uses the supplied HOElogo.png at a compact responsive size. Screen blen
 
 ## Countdown and waitlist
 
-Launch: December 25, 2026 at midnight PST. The form saves launch interest privately and sends signup notifications to connect@feyros.com. See [WAITLIST.md](WAITLIST.md) for required Hostinger mail and Turnstile settings. The form stays inactive until those settings exist.
+Launch: December 25, 2026 at midnight PST. The form saves pending interest privately, sends an expiring confirmation link to the subscriber, and notifies connect@feyros.com only after explicit inbox confirmation. Existing signups are not automatically verified. See [WAITLIST.md](WAITLIST.md) for required Hostinger mail and Turnstile settings. The form stays inactive until those settings exist.
 
 ## Counter meaning and storage
 
@@ -38,4 +38,4 @@ GitHub Actions builds and tests the deployment output, including session dedupli
 
 ## Deployment status
 
-Hostinger's supplied success screen confirms the initial deployment from this repository. Public domain reachability, persistent storage permissions and HTTPS for hoe.dating still need independent verification.
+Hostinger's supplied success screen confirms the initial deployment from this repository. Read-only live checks verify HTTPS, server routes, rendered countdown and client startup. Private storage persistence across hosting redeployments remains an operator check.

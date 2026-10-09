@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, mkdir } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createServer as reserveServer } from 'node:net';
 import { chromium } from '../.ci-runtime/node_modules/playwright/index.mjs';
 import { createApp } from '../dist/app.mjs';
 
@@ -80,23 +81,76 @@ try {
   } }));
   await page.route('https://challenges.cloudflare.com/**', route => route.fulfill({
     contentType: 'text/javascript',
-    body: "window.turnstile={render:(id,options)=>{setTimeout(()=>options.callback('browser-token'),10);return 1;},reset:()=>{}};"
+    body: "window.turnstile={render:(id,options)=>{window.testWidgetOptions={size:options.size,appearance:options.appearance};setTimeout(()=>options.callback('browser-token'),10);return 1;},reset:()=>{}};"
   }));
   await page.route('**/api/waitlist', route => {
     requests.push(route.request().postDataJSON());
-    return route.fulfill({ json: { message: "You're on the list. We'll let you know when HOE is ready." } });
+    return route.fulfill({ json: { message: "Check your inbox for a confirmation link. Confirm your email to join the waitlist." } });
   });
   await page.goto(url);
   await page.locator('input[name=email]').fill('test@example.com');
   await page.locator('input[name=consent]').check();
   await page.waitForFunction(() => !document.querySelector('.join').disabled);
+  assert.deepEqual(await page.evaluate(() => window.testWidgetOptions), { size: 'normal', appearance: 'interaction-only' });
+  assert.equal(await page.locator('.protection-note svg').count(), 1);
   await page.locator('.join').click();
-  await page.locator('#waitlist-message').filter({ hasText: "You're on the list" }).waitFor();
+  await page.locator('#waitlist-message').filter({ hasText: "Check your inbox" }).waitFor();
   assert.equal(requests.length, 1);
   assert.deepEqual(requests[0], { email: 'test@example.com', consent: true,
     website: '', nonce: 'browser-nonce', turnstileToken: 'browser-token' });
   assert.equal(await page.locator('#waitlist-form').isHidden(), true);
   console.log('Configured form submission and accessible success state verified.');
+
+  // Real confirmation routes, with mail and bot providers stubbed to avoid contacting anyone.
+  const reservation = reserveServer();
+  await new Promise(resolve => reservation.listen(0, '127.0.0.1', resolve));
+  const port = reservation.address().port;
+  await new Promise(resolve => reservation.close(resolve));
+  const confirmationOrigin = 'http://127.0.0.1:' + port;
+  const confirmationDirectory = join(directory, 'confirmation');
+  const mails = [];
+  const confirmationServer = await createApp({
+    dataDir: confirmationDirectory, secureCookies: false,
+    waitlistOptions: { minFormAge: 0, config: {
+      origin: confirmationOrigin, siteKey: 'browser-test-key', turnstileSecret: 'test-secret',
+      mailToken: 'test-mail-token', mailboxId: 'ACtestMailbox', dailyLimit: 100
+    }, fetchImpl: async (url, init) => {
+      if (url.includes('siteverify')) return new Response(JSON.stringify({
+        success: true, hostname: '127.0.0.1', action: 'waitlist'
+      }));
+      mails.push(JSON.parse(init.body));
+      return new Response('{}');
+    } }
+  });
+  await new Promise(resolve => confirmationServer.listen(port, '127.0.0.1', resolve));
+  try {
+    const stateResponse = await fetch(confirmationOrigin + '/api/waitlist-form');
+    const state = await stateResponse.json();
+    const signup = await fetch(confirmationOrigin + '/api/waitlist', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Origin: confirmationOrigin,
+        Cookie: stateResponse.headers.get('set-cookie').split(';')[0] },
+      body: JSON.stringify({ email: 'browser@example.com', consent: true, website: '',
+        nonce: state.nonce, turnstileToken: 'test-token' })
+    });
+    assert.equal(signup.status, 200);
+    assert.deepEqual(mails[0].to, ['browser@example.com']);
+    const token = mails[0].text.match(/token=([A-Za-z0-9_-]{43})/)[1];
+    const confirmationPage = await browser.newPage({ viewport: { width: 320, height: 900 } });
+    await confirmationPage.goto(confirmationOrigin + '/confirm?token=' + token);
+    assert.equal(JSON.parse(await readFile(join(confirmationDirectory, 'waitlist.json'), 'utf8'))[0].verifiedAt, null);
+    assert.equal(mails.length, 1);
+    assert.equal(await confirmationPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await confirmationPage.getByRole('button', { name: 'Confirm my email' }).click();
+    await confirmationPage.locator('p').filter({ hasText: /email is confirmed/i }).waitFor();
+    assert.equal(mails.length, 2);
+    assert.deepEqual(mails[1].to, ['connect@feyros.com']);
+    assert.ok(JSON.parse(await readFile(join(confirmationDirectory, 'waitlist.json'), 'utf8'))[0].verifiedAt);
+    await confirmationPage.screenshot({ path: 'artifacts/hoe-confirmed-mobile.png', fullPage: true });
+    await confirmationPage.close();
+    console.log('Scanner-safe confirmation page and real native confirmation POST verified at 320px.');
+  } finally {
+    await new Promise(resolve => { confirmationServer.close(resolve); confirmationServer.closeAllConnections(); });
+  }
 } finally {
   await browser.close();
   await new Promise(resolve => { server.close(resolve); server.closeAllConnections(); });
