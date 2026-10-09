@@ -253,7 +253,7 @@ export async function createWaitlist({
     entry.version === 2 && entry.confirmation.hash === hashToken(token)) : -1;
   const confirmationPage = (message, token = null) => '<!doctype html><html lang="en"><head>' +
     '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
-    '<meta name="referrer" content="no-referrer"><meta name="robots" content="noindex,nofollow">' +
+    '<meta name="referrer" content="strict-origin"><meta name="robots" content="noindex,nofollow">' +
     '<title>Confirm your email · Heaven On Earth</title><style>' +
     '*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;' +
     'background:#21131d;color:#fff0d9;font:16px/1.6 system-ui,sans-serif}' +
@@ -299,7 +299,7 @@ export async function createWaitlist({
     publicConfig, form,
     async handleConfirmation(request, response) {
       response.setHeader('Cache-Control', 'no-store');
-      response.setHeader('Referrer-Policy', 'no-referrer');
+      response.setHeader('Referrer-Policy', 'strict-origin');
       response.setHeader('X-Robots-Tag', 'noindex, nofollow');
       const send = (status, message, token = null) => {
         response.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8' });

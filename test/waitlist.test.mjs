@@ -92,7 +92,7 @@ test('only explicit confirmation verifies email access and sends one team notice
   const preview = await fetch(f.url + '/confirm?token=' + token);
   assert.equal(preview.status, 200);
   assert.match(await preview.text(), /Confirm my email/);
-  assert.equal(preview.headers.get('referrer-policy'), 'no-referrer');
+  assert.equal(preview.headers.get('referrer-policy'), 'strict-origin');
   assert.equal((await fetch(f.url + '/confirm?token=' + token, { method: 'HEAD' })).status, 200);
   assert.equal((await records(f.directory))[0].verifiedAt, null);
   assert.equal(mailCalls(f.calls).length, 1);

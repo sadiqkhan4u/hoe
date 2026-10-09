@@ -22,7 +22,7 @@ Save variables in the website dashboard, Apply changes, and deploy latest main. 
 4. An explicit confirmation POST consumes the action, records verifiedAt, then notifies connect@feyros.com with a verified signup.
 5. Only records with verifiedAt belong in the confirmed launch mailing list.
 
-Links expire in 24 hours. A random 256-bit token is emailed; only its SHA-256 hash is stored privately. Replay cannot trigger another notification. The confirmation page uses no-referrer and has no third-party assets.
+Links expire in 24 hours. A random 256-bit token is emailed; only its SHA-256 hash is stored privately. Replay cannot trigger another notification. The confirmation page uses strict-origin referrers, which omit paths/query strings and keep the token out of referrers, and has no third-party assets. This also keeps the browser's native form Origin compatible with exact canonical Origin checks.
 
 Existing records remain unchanged and unverified on startup. Their owners can submit again to receive a confirmation. No bulk mail or retroactive verification is performed. A migrated legacy signup preserves its original notification history.
 

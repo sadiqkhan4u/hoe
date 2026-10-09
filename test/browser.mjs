@@ -140,7 +140,12 @@ try {
     assert.equal(JSON.parse(await readFile(join(confirmationDirectory, 'waitlist.json'), 'utf8'))[0].verifiedAt, null);
     assert.equal(mails.length, 1);
     assert.equal(await confirmationPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    const confirmationReply = confirmationPage.waitForResponse(reply =>
+      reply.url() === confirmationOrigin + '/confirm' && reply.request().method() === 'POST');
     await confirmationPage.getByRole('button', { name: 'Confirm my email' }).click();
+    const nativeReply = await confirmationReply;
+    assert.equal(nativeReply.request().headers().origin, confirmationOrigin);
+    assert.equal(nativeReply.status(), 200);
     await confirmationPage.locator('p').filter({ hasText: /email is confirmed/i }).waitFor();
     assert.equal(mails.length, 2);
     assert.deepEqual(mails[1].to, ['connect@feyros.com']);
