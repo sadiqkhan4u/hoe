@@ -11,7 +11,7 @@ async function check(path, inspect) {
 }
 let liveReady = false;
 for (let attempt = 1; attempt <= 6; attempt++) {
-  const [page, health, config, script] = await Promise.all([
+  const [page, health, config, script, confirmation] = await Promise.all([
     check('/', (_, body) => ({ latestScript: body.includes('/site.js?v=20261009-2'), renderedCountdown: /id="days">\d+<\/strong>/.test(body) })),
     check('/health', (_, body) => { try { return { healthy: JSON.parse(body).status === 'ok' }; } catch { return { healthy: false }; } }),
     check('/api/public-config', (_, body) => {
@@ -23,12 +23,17 @@ for (let attempt = 1; attempt <= 6; attempt++) {
     check('/site.js?v=20261009-2', (response, body) => ({
       javascriptType: /javascript/.test(response.headers.get('content-type') || ''),
       expectedScript: body.includes("appearance: 'interaction-only'")
+    })),
+    check('/confirm?token=' + 'x'.repeat(43), (response, body) => ({
+      handled: response.status === 400 && body.includes('This confirmation link is invalid'),
+      tokenSafeReferrers: response.headers.get('referrer-policy') === 'strict-origin',
+      noReflectedToken: !body.includes('x'.repeat(43))
     }))
   ]);
-  console.log(JSON.stringify({ attempt, page, health, config, script }));
-  if (page.latestScript && page.renderedCountdown && health.healthy && config.validConfig && config.waitlistAvailable && script.javascriptType && script.expectedScript) {
+  console.log(JSON.stringify({ attempt, page, health, config, script, confirmation }));
+  if (page.latestScript && page.renderedCountdown && health.healthy && config.validConfig && config.waitlistAvailable && script.javascriptType && script.expectedScript && confirmation.handled && confirmation.tokenSafeReferrers && confirmation.noReflectedToken) {
     liveReady = true;
-    console.log('LIVE_READY: current page, countdown markup, Node API, enabled waitlist configuration and browser asset verified.');
+    console.log('LIVE_READY: current page, countdown markup, Node API, enabled waitlist configuration, browser asset and confirmation endpoint verified.');
     break;
   }
   if (attempt === 6) console.log('LIVE_NEEDS_REVIEW: read-only diagnostics above identify the deployment or configuration that still needs attention.');
