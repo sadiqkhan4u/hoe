@@ -198,7 +198,7 @@ test('security policy and served scripts allow the intended widget and no privat
   const policy = page.headers.get('content-security-policy');
   assert.match(policy, /script-src 'self' https:\/\/challenges.cloudflare.com/);
   assert.match(policy, /frame-src https:\/\/challenges.cloudflare.com/);
-  const script = await fetch(f.url + '/site.mjs');
+  const script = await fetch(f.url + '/site.js');
   assert.equal(script.status, 200);
   assert.match(script.headers.get('content-type'), /javascript/);
   const body = await script.text();
