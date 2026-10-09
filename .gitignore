@@ -1,0 +1,26 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Dependencies and generated outputs
+node_modules/
+.next/
+.nuxt/
+dist/
+build/
+coverage/
+.venv/
+__pycache__/
+*.pyc
+
+# Logs and local tooling
+*.log
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
