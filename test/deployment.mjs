@@ -9,6 +9,7 @@ async function check(path, inspect) {
     return { reachable: false, reason: error.cause?.code || error.name };
   }
 }
+let liveReady = false;
 for (let attempt = 1; attempt <= 6; attempt++) {
   const [page, health, config, script] = await Promise.all([
     check('/', (_, body) => ({ latestScript: body.includes('/site.js?v=20261009-1'), renderedCountdown: /id="days">\d+<\/strong>/.test(body) })),
@@ -21,14 +22,35 @@ for (let attempt = 1; attempt <= 6; attempt++) {
     }),
     check('/site.js?v=20261009-1', (response, body) => ({
       javascriptType: /javascript/.test(response.headers.get('content-type') || ''),
-      expectedScript: body.includes("startCountdown(date.dateTime || null")
+      expectedScript: body.includes("Object.prototype.hasOwnProperty.call(incoming, 'launchAt')")
     }))
   ]);
   console.log(JSON.stringify({ attempt, page, health, config, script }));
   if (page.latestScript && page.renderedCountdown && health.healthy && config.validConfig && config.waitlistAvailable && script.javascriptType && script.expectedScript) {
+    liveReady = true;
     console.log('LIVE_READY: current page, countdown markup, Node API, enabled waitlist configuration and browser asset verified.');
     break;
   }
   if (attempt === 6) console.log('LIVE_NEEDS_REVIEW: read-only diagnostics above identify the deployment or configuration that still needs attention.');
   else await new Promise(resolve => setTimeout(resolve, 10000));
+}
+
+if (liveReady) {
+  const { chromium } = await import('../.ci-runtime/node_modules/playwright/index.mjs');
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 393, height: 1000 } });
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.goto(origin, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await page.waitForFunction(() => /^\d+$/.test(document.querySelector('#days')?.textContent || ''));
+    const first = await page.locator('#seconds').innerText();
+    await page.waitForFunction(value => document.querySelector('#seconds').textContent !== value, first);
+    await page.waitForFunction(() => !/Checking waitlist availability/.test(document.querySelector('#waitlist-message').textContent));
+    await page.screenshot({ path: 'artifacts/hoe-live-mobile.png', fullPage: true });
+    console.log(JSON.stringify({ liveBrowser: true, countdownTicking: true,
+      startupFinished: true, waitlistButtonEnabled: !(await page.locator('.join').isDisabled()),
+      pageErrorCount: errors.length }));
+    if (errors.length) throw new Error('Live page has browser script errors.');
+  } finally { await browser.close(); }
 }
