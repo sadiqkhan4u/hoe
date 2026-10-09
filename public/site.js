@@ -95,9 +95,9 @@ function loadChallenge(siteKey) {
       try {
         widgetId = window.turnstile.render('#bot-check', {
           sitekey: siteKey, action: 'waitlist', theme: 'dark', size: window.matchMedia('(min-width: 360px)').matches ? 'normal' : 'compact', appearance: 'interaction-only',
-          callback: value => { token = value; updateButton(); message.textContent = ''; },
-          'expired-callback': () => { token = ''; updateButton(); message.textContent = 'Please complete the security check again.'; },
-          'error-callback': () => { token = ''; updateButton(); message.textContent = 'Please refresh to retry the security check.'; }
+          callback: value => { if (form.hidden) return; token = value; updateButton(); message.textContent = ''; },
+          'expired-callback': () => { if (form.hidden) return; token = ''; updateButton(); message.textContent = 'Please complete the security check again.'; },
+          'error-callback': () => { if (form.hidden) return; token = ''; updateButton(); message.textContent = 'Please refresh to retry the security check.'; }
         });
         resolve();
       } catch { reject(new Error('The security check could not start. Please try again later.')); }
@@ -137,6 +137,23 @@ function startCountdown(launchAt, serverTime) {
     countdownTimer = setInterval(() => { if (tick()) clearInterval(countdownTimer); }, 1000);
   }
 }
+function showConfirmationMessage(text) {
+  const blocks = String(text).split(/\n\s*\n/);
+  const heading = document.createElement('h2');
+  heading.textContent = blocks.shift();
+  const paragraphs = blocks.map((block, index) => {
+    const paragraph = document.createElement('p');
+    paragraph.textContent = block;
+    paragraph.className = ['confirmation-intro', 'confirmation-action', 'confirmation-wink', 'confirmation-note'][index] || '';
+    return paragraph;
+  });
+  message.replaceChildren(heading, ...paragraphs);
+  message.classList.add('success');
+  message.scrollIntoView({
+    behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    block: 'start'
+  });
+}
 form.addEventListener('submit', async event => {
   event.preventDefault();
   if (button.disabled || busy) return;
@@ -153,8 +170,7 @@ form.addEventListener('submit', async event => {
       })
     }, 25000);
 
-    message.textContent = result.message;
-    message.classList.add('success');
+    showConfirmationMessage(result.message);
     form.hidden = true;
     document.querySelector('#bot-check').hidden = true;
   } catch (error) {

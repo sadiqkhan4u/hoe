@@ -12,7 +12,7 @@ async function check(path, inspect) {
 let liveReady = false;
 for (let attempt = 1; attempt <= 6; attempt++) {
   const [page, health, config, script, confirmation] = await Promise.all([
-    check('/', (_, body) => ({ latestScript: body.includes('/site.js?v=20261009-2'), renderedCountdown: /id="days">\d+<\/strong>/.test(body) })),
+    check('/', (_, body) => ({ latestScript: body.includes('/site.js?v=20261009-3'), renderedCountdown: /id="days">\d+<\/strong>/.test(body) })),
     check('/health', (_, body) => { try { return { healthy: JSON.parse(body).status === 'ok' }; } catch { return { healthy: false }; } }),
     check('/api/public-config', (_, body) => {
       try {
@@ -20,9 +20,9 @@ for (let attempt = 1; attempt <= 6; attempt++) {
         return { validConfig: typeof value.launchAt === 'string', waitlistAvailable: value.waitlist?.available === true };
       } catch { return { validConfig: false, waitlistAvailable: false }; }
     }),
-    check('/site.js?v=20261009-2', (response, body) => ({
+    check('/site.js?v=20261009-3', (response, body) => ({
       javascriptType: /javascript/.test(response.headers.get('content-type') || ''),
-      expectedScript: body.includes("appearance: 'interaction-only'")
+      expectedScript: body.includes("showConfirmationMessage") && body.includes("appearance: 'interaction-only'")
     })),
     check('/confirm?token=' + 'x'.repeat(43), (response, body) => ({
       handled: response.status === 400 && body.includes('This confirmation link is invalid'),

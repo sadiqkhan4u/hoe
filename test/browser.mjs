@@ -85,7 +85,7 @@ try {
   }));
   await page.route('**/api/waitlist', route => {
     requests.push(route.request().postDataJSON());
-    return route.fulfill({ json: { message: "Check your inbox for a confirmation link. Confirm your email to join the waitlist." } });
+    return route.fulfill({ json: { message: "Your spark is almost on the list. 💌\n\nWe’re building a little heaven for real connections, playful souls and people who actually want to show up.\n\nCheck your inbox, open the confirmation link and tap “Confirm my email” to finish joining. That little extra effort confirms we can reach you—and helps cut down on bots, spam and fake signups crashing the party.\n\nGood hands? We’re aiming for good vibes… and good HOEs. 😉\n\nAlready confirmed? You’re on the list. Keep that halo handy." } });
   });
   await page.goto(url);
   await page.locator('input[name=email]').fill('test@example.com');
@@ -99,7 +99,15 @@ try {
   assert.deepEqual(requests[0], { email: 'test@example.com', consent: true,
     website: '', nonce: 'browser-nonce', turnstileToken: 'browser-token' });
   assert.equal(await page.locator('#waitlist-form').isHidden(), true);
-  console.log('Configured form submission and accessible success state verified.');
+  for (const width of [393, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.locator('#waitlist-message').scrollIntoViewIfNeeded();
+    assert.ok(await page.locator('#waitlist-message h2').evaluate(element => parseFloat(getComputedStyle(element).fontSize)) >= 22);
+    assert.ok(await page.locator('#waitlist-message .confirmation-action').evaluate(element => parseFloat(getComputedStyle(element).fontSize)) >= 16);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await page.screenshot({ path: 'artifacts/hoe-waitlist-message-' + width + '.png', fullPage: true });
+  }
+  console.log('Configured signup and larger, readable mobile confirmation message verified.');
 
   // Real confirmation routes, with mail and bot providers stubbed to avoid contacting anyone.
   const reservation = reserveServer();

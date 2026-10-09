@@ -3,7 +3,7 @@ import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from
 import { readFile, writeFile, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const success = { message: 'Check your inbox for a confirmation email. Open the link and confirm to join the waitlist. If you already confirmed, you are on the list.' };
+const success = { message: "Your spark is almost on the list. 💌\n\nWe’re building a little heaven for real connections, playful souls and people who actually want to show up.\n\nCheck your inbox, open the confirmation link and tap “Confirm my email” to finish joining. That little extra effort confirms we can reach you—and helps cut down on bots, spam and fake signups crashing the party.\n\nGood hands? We’re aiming for good vibes… and good HOEs. 😉\n\nAlready confirmed? You’re on the list. Keep that halo handy." };
 const CONFIRM_TTL = 24 * 60 * 60 * 1000;
 const RESEND_COOLDOWN = 15 * 60 * 1000;
 const hashToken = token => createHash('sha256').update(token).digest('hex');
