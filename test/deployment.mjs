@@ -53,7 +53,7 @@ if (liveReady) {
     await page.screenshot({ path: 'artifacts/hoe-live-mobile.png', fullPage: true });
     console.log(JSON.stringify({ liveBrowser: true, countdownTicking: true,
       startupFinished: true, waitlistButtonEnabled: !(await page.locator('.join').isDisabled()),
-      waitlistStatus: status, securityWidgetPresent: (await page.locator('#bot-check iframe').count()) > 0,
+      waitlistStatus: status, securityWidgetPresent: page.frames().some(frame => frame.url().startsWith('https://challenges.cloudflare.com/')),
       pageErrorCount: errors.length }));
     if (errors.length) throw new Error('Live page has browser script errors.');
   } finally { await browser.close(); }
