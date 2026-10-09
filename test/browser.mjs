@@ -29,7 +29,12 @@ try {
     }));
     assert.ok(layout.width <= 230 && layout.width >= 170);
     assert.equal(layout.blend, 'screen');
-    assert.equal(layout.overflow, false);
+    assert.equal(layout.overflow, false, JSON.stringify(await page.evaluate(() =>
+      [...document.querySelectorAll('body *')].map(element => {
+        const rect = element.getBoundingClientRect();
+        return { element: element.tagName, class: element.className, right: rect.right, width: rect.width };
+      }).filter(item => item.right > innerWidth + 1)
+    )));
     assert.equal(await page.locator('text=Filmymantra').count(), 0);
     assert.deepEqual(errors, []);
     await page.screenshot({ path: 'artifacts/hoe-' + viewport.width + '.png', fullPage: true });
