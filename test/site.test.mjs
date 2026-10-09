@@ -154,3 +154,22 @@ test('legacy counter storage retains visits and retires click totals on next wri
   await fetch(url);
   assert.deepEqual(JSON.parse(await readFile(join(directory, 'counters.json'), 'utf8')), { visits: 148 });
 });
+
+test('countdown is already rendered and classic browser script uses JavaScript MIME', async t => {
+  const { url } = await fixture(t);
+  const page = await fetch(url);
+  const html = await page.text();
+  for (const unit of ['days', 'hours', 'minutes', 'seconds']) {
+    assert.match(html, new RegExp('id="' + unit + '">\\d+</strong>'));
+  }
+  assert.match(html, /datetime="2026-12-25T08:00:00.000Z"/);
+  assert.match(html, /<script defer src="\/site.js\?v=/);
+  assert.doesNotMatch(html, /type="module"|\/site.mjs/);
+  const script = await fetch(url + '/site.js?v=20261009-1');
+  assert.equal(script.status, 200);
+  assert.match(script.headers.get('content-type'), /javascript/);
+  assert.equal(script.headers.get('x-content-type-options'), 'nosniff');
+  assert.match(script.headers.get('content-security-policy'), /script-src 'self' https:\/\/challenges.cloudflare.com/);
+  assert.doesNotMatch(await script.text(), /^import /m);
+  assert.equal((await fetch(url + '/site.mjs')).status, 404);
+});

@@ -48,3 +48,9 @@ Official guide: https://www.hostinger.com/support/how-to-deploy-a-nodejs-website
 ## Countdown and waitlist activation
 
 See [WAITLIST.md](WAITLIST.md) for mail/bot-protection setup. Default launch is December 25, 2026 at 00:00 PST. The existing build/start settings do not change. Keep private waitlist data beside counters in the persistent data directory. The waitlist is inactive until mail credentials and Turnstile keys are supplied.
+
+## Countdown and signup troubleshooting
+
+The countdown renders on the server and starts ticking independently from waitlist configuration. The browser loads `/site.js` as a deferred classic JavaScript asset. Configuration, form and submission requests stop waiting after eight seconds and show a clear unavailable message. The signup button remains disabled until server configuration, a form nonce and the Turnstile challenge are ready.
+
+If a deployed page still shows the old dashes and “Checking waitlist availability…” permanently, confirm the latest main commit is deployed in Hostinger, then reload without cache. Check `/health`, `/api/public-config` and `/site.js` in the browser; they should return JSON, JSON and JavaScript respectively. Do not use static hosting for the waitlist: its server routes need the Node.js deployment.

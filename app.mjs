@@ -4,7 +4,7 @@ import { isAbsolute, join } from 'node:path';
 import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { createWaitlist } from './waitlist.mjs';
-import { parseLaunchAt } from './public/countdown.mjs';
+import { parseLaunchAt, countdownParts } from './public/countdown.mjs';
 
 async function openCounters(dataDir) {
   if (!isAbsolute(dataDir)) throw new Error('COUNTER_DATA_DIR must be an absolute path.');
@@ -51,7 +51,7 @@ export async function createApp({
   const template = await readFile(new URL('./public/index.html', import.meta.url), 'utf8');
   const logo = await readFile(new URL('./public/hoe-logo.png', import.meta.url));
   const scripts = new Map();
-  for (const file of ['site.mjs', 'countdown.mjs']) {
+  for (const file of ['site.js']) {
     scripts.set('/' + file, await readFile(new URL('./public/' + file, import.meta.url)));
   }
   const cookie = (name) => name + '=1; Path=/; HttpOnly; SameSite=Lax' + (secureCookies ? '; Secure' : '');
@@ -96,7 +96,20 @@ export async function createApp({
       } else {
         totals = await counters.read();
       }
-      const html = template.replaceAll('{{visits}}', totals ? format(totals.visits) : 'Unavailable');
+      const serverTime = Date.now();
+      const parts = countdownParts(deadline, serverTime);
+      const values = {
+        visits: totals ? format(totals.visits) : 'Unavailable',
+        serverTime, launchAt: deadline || '',
+        launchDate: deadline ? new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/Los_Angeles', month: 'long', day: 'numeric', year: 'numeric',
+          hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+        }).format(new Date(deadline)) : 'Something good is on its way.',
+        countdownLabel: !parts ? 'Launch date coming soon' : parts.complete ? 'Launch updates coming soon' : 'Launching in',
+        waitlistStatus: waitlist.publicConfig().available ? 'Preparing the waitlist. Please enable JavaScript if this message stays here.' : 'The waitlist opens soon. Please check back.'
+      };
+      for (const unit of ['days', 'hours', 'minutes', 'seconds']) values[unit] = parts ? String(parts[unit]).padStart(2, '0') : '—';
+      const html = template.replace(/\{\{(\w+)\}\}/g, (_, name) => String(values[name]));
       return send(200, html, 'text/html; charset=utf-8');
     } catch (error) {
       console.error('Request failed:', error.message);

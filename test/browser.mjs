@@ -20,7 +20,7 @@ try {
     await page.locator('#days').filter({ hasText: /^\d+$/ }).waitFor();
     assert.match(await page.locator('#launch-date').innerText(), /December 25, 2026/);
     assert.equal(await page.locator('.join').isDisabled(), true);
-    assert.match(await page.locator('#waitlist-message').innerText(), /opens soon/);
+    await page.locator('#waitlist-message').filter({ hasText: /opens soon/ }).waitFor();
     assert.equal(await page.locator('.logo').evaluate(img => img.complete && img.naturalWidth === 1774), true);
     const layout = await page.locator('.logo').evaluate(img => ({
       width: img.getBoundingClientRect().width,
@@ -41,6 +41,32 @@ try {
     console.log('Countdown, compact logo and unavailable state verified at ' + viewport.width + 'px.');
     await page.close();
   }
+
+  // A stalled configuration request must not stop the countdown or leave "checking" forever.
+  for (const failure of ['stalled', 'html']) {
+    const page = await browser.newPage({ viewport: { width: 393, height: 1000 } });
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.route('**/api/public-config', async route => {
+      if (failure === 'html') return route.fulfill({ status: 404, contentType: 'text/html', body: '<h1>Not found</h1>' });
+      // Holding the route simulates a connection that never answers.
+    });
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
+    const first = await page.locator('#seconds').innerText();
+    await page.waitForFunction(value => document.querySelector('#seconds').textContent !== value, first);
+    await page.locator('#waitlist-message').filter({ hasText: /temporarily unavailable/ }).waitFor();
+    assert.equal(await page.locator('.join').isDisabled(), true);
+    assert.deepEqual(errors, []);
+    await page.screenshot({ path: 'artifacts/hoe-' + failure + '.png', fullPage: true });
+    console.log('Countdown stays live and signup fails closed for ' + failure + ' configuration.');
+    await page.close();
+  }
+  const noScript = await browser.newPage({ javaScriptEnabled: false });
+  await noScript.goto(url);
+  assert.match(await noScript.locator('#days').innerText(), /^\d+$/);
+  assert.match(await noScript.locator('noscript').innerText(), /Enable JavaScript/);
+  await noScript.close();
+
   const page = await browser.newPage({ viewport: { width: 393, height: 1000 } });
   const requests = [];
   await page.route('**/api/public-config', route => route.fulfill({ json: {

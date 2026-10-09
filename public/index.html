@@ -26,7 +26,7 @@
     @media(max-width:600px){.clock{gap:8px}.clock-card{padding:15px 5px 13px;border-radius:12px}.clock-card strong{font-size:29px}.clock-card span{font-size:9px;letter-spacing:.02em}.countdown{margin-top:27px}.signup-row{padding:7px;gap:4px}.email-input{padding:10px 6px;font-size:13px}.join{padding:13px 12px;font-size:12px}.waitlist{margin-top:26px}.consent{font-size:10px}}
     [hidden]{display:none!important}
   </style>
-  <script type="module" src="/site.mjs"></script>
+  <script defer src="/site.js?v=20261009-1"></script>
 </head>
 <body>
   <div class="shell">
@@ -38,14 +38,14 @@
         <h1>A little heaven.<span>A whole lot of chemistry.</span></h1>
         <p class="intro">Something worth connecting for is on its way.<br>We're creating a new space for sparks, stories, and meaningful connections.</p>
         <section class="countdown" aria-label="Launch countdown">
-          <p class="section-label" id="countdown-label">Launching in</p>
+          <p class="section-label" id="countdown-label">{{countdownLabel}}</p>
           <div class="clock">
-            <div class="clock-card"><strong id="days">—</strong><span>Days</span></div>
-            <div class="clock-card"><strong id="hours">—</strong><span>Hours</span></div>
-            <div class="clock-card"><strong id="minutes">—</strong><span>Minutes</span></div>
-            <div class="clock-card"><strong id="seconds">—</strong><span>Seconds</span></div>
+            <div class="clock-card"><strong id="days">{{days}}</strong><span>Days</span></div>
+            <div class="clock-card"><strong id="hours">{{hours}}</strong><span>Hours</span></div>
+            <div class="clock-card"><strong id="minutes">{{minutes}}</strong><span>Minutes</span></div>
+            <div class="clock-card"><strong id="seconds">{{seconds}}</strong><span>Seconds</span></div>
           </div>
-          <time class="launch-date" id="launch-date" datetime="2026-12-25T08:00:00Z">December 25, 2026 · 12:00 AM PST</time>
+          <time class="launch-date" id="launch-date" datetime="{{launchAt}}" data-server-time="{{serverTime}}">{{launchDate}}</time>
         </section>
         <section class="waitlist" aria-label="Join the launch waitlist">
           <p class="waitlist-caption">Be the first to find your spark.</p>
@@ -59,7 +59,7 @@
             <label class="consent"><input name="consent" type="checkbox" required> Email me about the Heaven On Earth launch.</label>
           </form>
           <div id="bot-check"></div>
-          <p class="form-message" id="waitlist-message" role="status" aria-live="polite">Checking waitlist availability…</p>
+          <p class="form-message" id="waitlist-message" role="status" aria-live="polite">{{waitlistStatus}}</p>
           <noscript><p class="form-message">Enable JavaScript to see the live countdown and join the waitlist.</p></noscript>
           <details class="privacy"><summary>How we use your email</summary><p>We store your email privately for HOE launch updates and notify our team when you join. We don’t sell your information. To remove your signup, contact connect@feyros.com. The security check is provided by Cloudflare Turnstile.</p></details>
         </section>
