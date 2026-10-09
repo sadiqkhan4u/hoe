@@ -47,9 +47,13 @@ if (liveReady) {
     const first = await page.locator('#seconds').innerText();
     await page.waitForFunction(value => document.querySelector('#seconds').textContent !== value, first);
     await page.waitForFunction(() => !/Checking waitlist availability/.test(document.querySelector('#waitlist-message').textContent));
+    // Allow the minimum form age and managed challenge to finish; automated browsers may still require an interactive check.
+    await page.waitForFunction(() => !document.querySelector('.join').disabled, null, { timeout: 12000 }).catch(() => {});
+    const status = await page.locator('#waitlist-message').innerText();
     await page.screenshot({ path: 'artifacts/hoe-live-mobile.png', fullPage: true });
     console.log(JSON.stringify({ liveBrowser: true, countdownTicking: true,
       startupFinished: true, waitlistButtonEnabled: !(await page.locator('.join').isDisabled()),
+      waitlistStatus: status, securityWidgetPresent: (await page.locator('#bot-check iframe').count()) > 0,
       pageErrorCount: errors.length }));
     if (errors.length) throw new Error('Live page has browser script errors.');
   } finally { await browser.close(); }
